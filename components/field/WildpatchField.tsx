@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type PointerEvent } from "react";
-import { Droplets, Grid2X2, Leaf, Minus, PawPrint, Plus, RotateCcw, Search, Shovel, TriangleAlert, X } from "lucide-react";
+import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { Copy, Droplets, Grid2X2, Leaf, Minus, PawPrint, Plus, RotateCcw, RotateCw, Search, Shovel, TriangleAlert, X } from "lucide-react";
 import { actionCost, projectConditions, isActionZoneValid, restorationActions } from "@/lib/engine/actions";
 import { investigationToolZones } from "@/lib/engine/scenario";
 import { useGame } from "@/lib/engine/store";
@@ -142,7 +142,7 @@ export function WildpatchField({
       if (!isActionZoneValid(actionId, zone)) {
         dispatch({ type: "SET_TOAST", message: "Placed outside the preferred zone. The verifier may not credit this." });
       }
-      dispatch({ type: "ADD_ACTION", id: actionId, zone, x: position.x, y: position.y });
+      dispatch({ type: "ADD_ACTION", id: actionId, pieceId: crypto.randomUUID(), zone, x: position.x, y: position.y });
       dispatch({ type: "CELEBRATE" });
     }
   };
@@ -208,7 +208,7 @@ export function WildpatchField({
     pointers.current.delete(event.pointerId);
     gesture.current = null;
   };
-  const movePiece = (id: ActionId, event: PointerEvent<HTMLButtonElement>) => {
+  const movePiece = (id: string, event: PointerEvent<HTMLButtonElement>) => {
     if (event.buttons === 0 || !fieldRef.current) return;
     const rect = fieldRef.current.getBoundingClientRect();
     const worldW = Math.max(rect.width, window.innerHeight * 0.85);
@@ -217,6 +217,25 @@ export function WildpatchField({
     const top = rect.top + rect.height / 2 + view.y - (worldH * view.scale) / 2;
     const x = Math.max(4, Math.min(96, ((event.clientX - left) / view.scale / worldW) * 100));
     const y = Math.max(8, Math.min(92, ((event.clientY - top) / view.scale / worldH) * 100));
+    const nearest = zones.reduce((best, zone) =>
+      Math.hypot(zone.x - x, zone.y - y) < Math.hypot(best.x - x, best.y - y) ? zone : best,
+    zones[0]);
+    dispatch({ type: "MOVE_PIECE", id, x, y, zone: nearest.id });
+  };
+  const movePieceByKeyboard = (id: string, event: KeyboardEvent<HTMLButtonElement>) => {
+    const movement = {
+      ArrowLeft: { x: -3, y: 0 },
+      ArrowRight: { x: 3, y: 0 },
+      ArrowUp: { x: 0, y: -3 },
+      ArrowDown: { x: 0, y: 3 },
+    }[event.key];
+    if (!movement) return;
+    event.preventDefault();
+    dispatch({ type: "SELECT_PIECE", id });
+    const piece = state.plan.find((item) => item.id === id);
+    if (!piece) return;
+    const x = Math.max(4, Math.min(96, piece.x + movement.x));
+    const y = Math.max(8, Math.min(92, piece.y + movement.y));
     const nearest = zones.reduce((best, zone) =>
       Math.hypot(zone.x - x, zone.y - y) < Math.hypot(best.x - x, best.y - y) ? zone : best,
     zones[0]);
@@ -304,8 +323,11 @@ export function WildpatchField({
                 key={piece.id}
                 type="button"
                 className={`restore-piece ${selectedPiece?.id === piece.id ? "restore-piece-selected" : ""} ${invalidPlacement ? "piece-invalid" : ""} ${prerequisiteMissing || action.warning ? "piece-warning" : ""}`}
-                style={{ left: `${piece.x}%`, top: `${piece.y}%` }}
+                style={{ left: `${piece.x}%`, top: `${piece.y}%`, transform: `translate(-50%, -50%) rotate(${piece.rotation ?? 0}deg)` }}
                 aria-label={`Order ${piece.order}, ${action.name} at ${zones.find((zone) => zone.id === piece.zone)?.label}. Select or drag to move.`}
+                aria-pressed={selectedPiece?.id === piece.id}
+                aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown"
+                onKeyDown={(event) => movePieceByKeyboard(piece.id, event)}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   dispatch({ type: "SELECT_PIECE", id: piece.id });
@@ -314,7 +336,7 @@ export function WildpatchField({
                 onClick={() => dispatch({ type: "SELECT_PIECE", id: piece.id })}
                 onPointerMove={(event) => {
                   event.stopPropagation();
-                  movePiece(piece.actionId, event);
+                  movePiece(piece.id, event);
                 }}
               >
                 <span className="piece-order-badge">{piece.order}</span>
@@ -392,7 +414,7 @@ export function WildpatchField({
                   disabled={placed}
                   aria-label={`${action.name}, ${action.cost} credits${action.warning ? `. Warning: ${action.warning}` : ""}`}
                   onPointerDown={(event) => !placed && actionDrag(event, action.id, action.name)}
-                  onClick={() => !placed && dispatch({ type: "ADD_ACTION", id: action.id })}
+                  onClick={() => !placed && dispatch({ type: "ADD_ACTION", id: action.id, pieceId: crypto.randomUUID() })}
                 >
                   <span className="field-token-art">{art[action.id] ? <img src={art[action.id]} alt="" /> : <ActionToken actionId={action.id} />}</span>
                   <span>{action.name}</span>
@@ -408,10 +430,14 @@ export function WildpatchField({
           <strong>{selectedPiece.order}. {restorationActions.find((item) => item.id === selectedPiece.actionId)?.name}</strong>
           <span>{zones.find((zone) => zone.id === selectedPiece.zone)?.label}</span>
           <span>{actionCost(selectedPiece)} credits · {restorationActions.find((item) => item.id === selectedPiece.actionId)?.durationDays} days</span>
-          {selectedPiece.actionId === "block-ditch" && <label>Gate opening · {selectedPiece.settings.openness ?? 20}%<input type="range" min="0" max="100" value={selectedPiece.settings.openness ?? 20} onChange={(event) => dispatch({ type: "UPDATE_PIECE_SETTING", id: selectedPiece.actionId, key: "openness", value: Number(event.target.value) })} /></label>}
-          {selectedPiece.actionId === "plant-sedges" && <label>Plant density · {selectedPiece.settings.density ?? 3}<input type="range" min="1" max="5" value={selectedPiece.settings.density ?? 3} onChange={(event) => dispatch({ type: "UPDATE_PIECE_SETTING", id: selectedPiece.actionId, key: "density", value: Number(event.target.value) })} /></label>}
-          {selectedPiece.actionId === "restore-flow" && <label>Channel width · {selectedPiece.settings.width ?? 2}<input type="range" min="1" max="3" value={selectedPiece.settings.width ?? 2} onChange={(event) => dispatch({ type: "UPDATE_PIECE_SETTING", id: selectedPiece.actionId, key: "width", value: Number(event.target.value) })} /></label>}
-          <button aria-label="Remove selected component and refund credits" onClick={() => dispatch({ type: "REMOVE_ACTION", id: selectedPiece.actionId })}><X aria-hidden="true" /> Reclaim</button>
+          {selectedPiece.actionId === "block-ditch" && <label>Gate opening · {selectedPiece.settings.openness ?? 20}%<input type="range" min="0" max="100" value={selectedPiece.settings.openness ?? 20} onChange={(event) => dispatch({ type: "UPDATE_PIECE_SETTING", id: selectedPiece.id, key: "openness", value: Number(event.target.value) })} /></label>}
+          {selectedPiece.actionId === "plant-sedges" && <label>Plant density · {selectedPiece.settings.density ?? 3}<input type="range" min="1" max="5" value={selectedPiece.settings.density ?? 3} onChange={(event) => dispatch({ type: "UPDATE_PIECE_SETTING", id: selectedPiece.id, key: "density", value: Number(event.target.value) })} /></label>}
+          {selectedPiece.actionId === "restore-flow" && <label>Channel width · {selectedPiece.settings.width ?? 2}<input type="range" min="1" max="3" value={selectedPiece.settings.width ?? 2} onChange={(event) => dispatch({ type: "UPDATE_PIECE_SETTING", id: selectedPiece.id, key: "width", value: Number(event.target.value) })} /></label>}
+          <div className="piece-inspector-actions">
+            <button aria-label={`Rotate ${restorationActions.find((item) => item.id === selectedPiece.actionId)?.name} clockwise`} onClick={() => dispatch({ type: "ROTATE_PIECE", id: selectedPiece.id })}><RotateCw aria-hidden="true" /> Rotate 90°</button>
+            <button aria-label={`Duplicate ${restorationActions.find((item) => item.id === selectedPiece.actionId)?.name}`} disabled={state.plan.length >= 20} onClick={() => dispatch({ type: "DUPLICATE_PIECE", id: selectedPiece.id, pieceId: crypto.randomUUID() })}><Copy aria-hidden="true" /> Duplicate</button>
+            <button aria-label="Reclaim selected component and refund credits" onClick={() => dispatch({ type: "REMOVE_ACTION", id: selectedPiece.id })}><X aria-hidden="true" /> Reclaim</button>
+          </div>
         </aside>
       )}
       {simulate && <div className="projection-panel"><strong>Projection, not a result</strong><div>{(["water", "soil", "vegetation", "biodiversity"] as const).map((key) => <ConditionMeter key={key} label={key === "biodiversity" ? "Biodiversity" : key[0].toUpperCase() + key.slice(1)} from={initialConditions[key]} value={projected[key]} delta={projected[key] - initialConditions[key]} />)}</div></div>}

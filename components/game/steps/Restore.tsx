@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp, TriangleAlert, X } from "lucide-react";
 import { actionCost, restorationActions, isActionZoneValid, projectConditions } from "@/lib/engine/actions";
 import { buildSubmission, useGame } from "@/lib/engine/store";
-import { submitSolution } from "@/lib/api";
+import { submitSolution } from "@/lib/submit-solution";
 import { useGameData } from "@/lib/data/context";
 import { BottomSheet, ChunkyButton, ProgressBar } from "../ui-kit";
 
@@ -39,7 +39,7 @@ export function Restore() {
           <span className="field-budget-value">{Math.max(0, 100 - spent)} cr left</span>
         </div>
         <ProgressBar value={spent} max={100} label={`Restoration budget · ${spent}/100 credits`} overrun={spent > 100} />
-        <p>Drag a component from the field tray onto its zone. Select a placed piece to adjust its settings.</p>
+        <p>Drag a component from the field tray onto its zone. Select a placed piece to adjust, rotate, duplicate, or reclaim it; use its arrow keys to move it.</p>
         <label className="projection-toggle">
           <input type="checkbox" checked={state.simulateProjection} onChange={(event) => dispatch({ type: "SET_SIMULATE", value: event.target.checked })} />
           Show projected field conditions
@@ -63,7 +63,7 @@ export function Restore() {
                       <button type="button" aria-label={`Move ${action.name} earlier`} disabled={index === 0} onClick={() => reorder(index, index - 1)}><ArrowUp aria-hidden="true" /></button>
                       <button type="button" aria-label={`Move ${action.name} later`} disabled={index === state.plan.length - 1} onClick={() => reorder(index, index + 1)}><ArrowDown aria-hidden="true" /></button>
                     </span>
-                    <button type="button" className="plan-remove" aria-label={`Remove ${action.name} and refund ${action.cost} credits`} onClick={() => dispatch({ type: "REMOVE_ACTION", id: piece.actionId })}><X aria-hidden="true" /></button>
+                    <button type="button" className="plan-remove" aria-label={`Remove ${action.name} and refund ${action.cost} credits`} onClick={() => dispatch({ type: "REMOVE_ACTION", id: piece.id })}><X aria-hidden="true" /></button>
                   </li>
                 );
               })}

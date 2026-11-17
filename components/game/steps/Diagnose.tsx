@@ -8,7 +8,7 @@ import { investigationToolZones } from "@/lib/engine/scenario";
 import { useDrag } from "@/lib/hooks/useDrag";
 import { Restorer } from "../art/Restorer";
 import { ChunkyButton, LeafBurst } from "../ui-kit";
-import type { CauseId, Confidence, EvidenceRelation, ToolId } from "@/lib/types";
+import type { CauseId, Confidence, EvidenceRelation, Severity, ToolId } from "@/lib/types";
 
 const confidenceLevels: Confidence[] = ["low", "medium", "high"];
 export function Diagnose() {
@@ -18,6 +18,8 @@ export function Diagnose() {
   const [pendingLink, setPendingLink] = useState<{ toolId: ToolId; cause: CauseId } | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<ToolId | null>(null);
   const confidenceIndex = Math.max(0, confidenceLevels.indexOf(state.confidence ?? "low"));
+  const severityLevels: Severity[] = ["mild", "moderate", "severe"];
+  const severityIndex = Math.max(0, severityLevels.indexOf(state.severity ?? "moderate"));
   const canLock = Boolean(state.cause && state.confidence && state.severity && state.components.length);
   const readoutIsValid = (toolId: ToolId) => state.toolPlacements[toolId]?.valid ?? true;
   const relationship = (toolId: ToolId, causeId: CauseId): EvidenceRelation => {
@@ -25,6 +27,16 @@ export function Diagnose() {
     return state.clueRelations[toolId]?.[causeId] ?? "neutral";
   };
   const setConfidence = (index: number) => dispatch({ type: "SET_CONFIDENCE", confidence: confidenceLevels[Math.max(0, Math.min(2, index))] });
+  const setSeverity = (index: number) => dispatch({ type: "SET_SEVERITY", severity: severityLevels[Math.max(0, Math.min(2, index))] });
+  const nudgeSeverity = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") { event.preventDefault(); setSeverity(severityIndex + 1); }
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") { event.preventDefault(); setSeverity(severityIndex - 1); }
+  };
+  const dragSeverity = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!event.buttons) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setSeverity(Math.round(((event.clientX - rect.left) / rect.width) * 2));
+  };
   const nudgeConfidence = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowRight" || event.key === "ArrowUp") { event.preventDefault(); setConfidence(confidenceIndex + 1); }
     if (event.key === "ArrowLeft" || event.key === "ArrowDown") { event.preventDefault(); setConfidence(confidenceIndex - 1); }
@@ -52,7 +64,7 @@ export function Diagnose() {
           <div><span className="eyebrow">FIELDWORK · STEP 03</span><h1>Make sense of your field notes.</h1></div>
           {state.diagnosisLocked && <span className="locked-diagnosis"><Check aria-hidden="true" /> Locked</span>}
         </div>
-        <p>Drag each flag onto a possible explanation and decide what the clue means. You can also tap a suspect card to set your prime suspect.</p>
+        <p>Drag an evidence flag onto a cause card to connect the clue, then mark it as supporting, contradicting, or uncertain. To choose your prime suspect without dragging, simply tap a cause card.</p>
         <div className="diagnose-board">
           <div className="evidence-tokens" aria-label="Evidence flags to sort">
             {state.toolsUsed.map((toolId) => {
@@ -122,9 +134,22 @@ export function Diagnose() {
             <span>{state.confidence === "high" ? "+2 / −4" : state.confidence === "medium" ? "+1 / −2" : "±0"} possible score swing</span>
           </section>
           <section className="dial-card severity-gauge">
-            <label htmlFor="severity-range" className="eyebrow">SEVERITY · {state.severity ?? "NOT SET"}</label>
-            <div className="gauge-face"><span className={`gauge-needle gauge-${state.severity ?? "unset"}`} /></div>
-            <input id="severity-range" type="range" min="0" max="2" step="1" value={state.severity === "mild" ? 0 : state.severity === "severe" ? 2 : 1} disabled={state.diagnosisLocked} aria-label="Severity gauge" onChange={(event) => dispatch({ type: "SET_SEVERITY", severity: (["mild", "moderate", "severe"] as const)[Number(event.target.value)] })} />
+            <label id="severity-label" htmlFor="severity-range" className="eyebrow">SEVERITY · {state.severity ?? "NOT SET"}</label>
+            <button
+              type="button"
+              className="gauge-face"
+              id="severity-range"
+              role="slider"
+              aria-labelledby="severity-label"
+              aria-valuemin={0}
+              aria-valuemax={2}
+              aria-valuenow={severityIndex}
+              aria-valuetext={state.severity ?? "Moderate, not set"}
+              disabled={state.diagnosisLocked}
+              onKeyDown={nudgeSeverity}
+              onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); dragSeverity(event); }}
+              onPointerMove={dragSeverity}
+            ><span className={`gauge-needle gauge-${state.severity ?? "moderate"}`} /></button>
             <div className="gauge-labels"><span>Mild</span><span>Moderate</span><span>Severe</span></div>
           </section>
         </div>

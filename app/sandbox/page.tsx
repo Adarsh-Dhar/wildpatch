@@ -1,5 +1,5 @@
-import WildpatchField from "@/components/wildpatch-field";
+import { redirect } from "next/navigation";
 
 export default function SandboxPage() {
-  return <WildpatchField />;
+  redirect("/");
 }

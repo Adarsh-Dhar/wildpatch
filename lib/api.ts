@@ -1,5 +1,4 @@
 import { dailyScenario } from "./engine/scenario";
-import { verify } from "./engine/verify";
 import {
   achievements,
   journalEntries,
@@ -11,19 +10,15 @@ import {
   species,
   stages,
 } from "./data/mock-data";
-import { causes, investigationTools, toolEvidence } from "./engine/scenario";
+import { causes, investigationTools } from "./engine/scenario";
 import { restorationActions } from "./engine/actions";
-import type { Confidence, Submission, Tab, Report } from "./types";
+import type { Confidence, Tab } from "./types";
 
 const wait = (milliseconds: number) =>
   new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
 export async function getDailyScenario() {
   await wait(400);
   return dailyScenario;
-}
-export async function submitSolution(submission: Submission): Promise<Report> {
-  await wait(500);
-  return verify(submission);
 }
 export async function getLeaderboard(
   period: "daily" | "weekly" | "community" = "daily",
@@ -86,7 +81,6 @@ export async function getInitialGameData() {
     },
     causes,
     investigationTools,
-    toolEvidence,
     restorationActions,
     stages,
     leaderboard: { daily, weekly, community },

@@ -77,15 +77,18 @@ type Action =
   | {
       type: "ADD_ACTION";
       id: ActionId;
+      pieceId: string;
       zone?: FieldZone;
       x?: number;
       y?: number;
     }
-  | { type: "REMOVE_ACTION"; id: ActionId }
+  | { type: "DUPLICATE_PIECE"; id: string; pieceId: string }
+  | { type: "ROTATE_PIECE"; id: string }
+  | { type: "REMOVE_ACTION"; id: string }
   | { type: "MOVE_ACTION"; from: number; to: number }
-  | { type: "MOVE_PIECE"; id: ActionId; x: number; y: number; zone: FieldZone }
+  | { type: "MOVE_PIECE"; id: string; x: number; y: number; zone: FieldZone }
   | { type: "SELECT_PIECE"; id: string | null }
-  | { type: "UPDATE_PIECE_SETTING"; id: ActionId; key: "openness" | "density" | "width"; value: number }
+  | { type: "UPDATE_PIECE_SETTING"; id: string; key: "openness" | "density" | "width"; value: number }
   | { type: "SET_SIMULATE"; value: boolean }
   | { type: "SET_OUTFIT"; outfit: 0 | 1 | 2 | 3 }
   | { type: "CELEBRATE" }
@@ -276,7 +279,6 @@ function reducer(state: GameState, action: Action): GameState {
         toast: "Diagnosis locked. Build your plan.",
       };
     case "ADD_ACTION": {
-      if (state.plan.some((piece) => piece.actionId === action.id)) return state;
       const item = restorationActions.find(
         (candidate) => candidate.id === action.id,
       );
@@ -295,8 +297,9 @@ function reducer(state: GameState, action: Action): GameState {
         "habitat-corridor": "bank",
       };
       const piece: PlacedPiece = {
-        id: `${action.id}-${Date.now()}`,
+        id: action.pieceId,
         actionId: action.id,
+        rotation: 0,
         zone: action.zone ?? defaultZones[action.id],
         x: action.x ?? [27, 68, 50, 77, 23][index % 5],
         y: action.y ?? [34, 30, 57, 70, 75][index % 5],
@@ -317,9 +320,36 @@ function reducer(state: GameState, action: Action): GameState {
         toast: item.warning ?? "",
       };
     }
+    case "DUPLICATE_PIECE": {
+      const original = state.plan.find((piece) => piece.id === action.id);
+      if (!original || state.plan.length >= 20) return state;
+      const duplicate: PlacedPiece = {
+        ...original,
+        id: action.pieceId,
+        x: Math.max(4, Math.min(96, original.x + (original.x > 90 ? -3 : 3))),
+        y: Math.max(8, Math.min(92, original.y + (original.y > 86 ? -4 : 4))),
+        order: state.plan.length + 1,
+        settings: { ...original.settings },
+      };
+      return {
+        ...state,
+        plan: [...state.plan, duplicate],
+        selectedPieceId: duplicate.id,
+        toast: "Piece duplicated. Drag it to a new position.",
+      };
+    }
+    case "ROTATE_PIECE":
+      return {
+        ...state,
+        plan: state.plan.map((piece) =>
+          piece.id === action.id
+            ? { ...piece, rotation: ((piece.rotation ?? 0) + 90) % 360 }
+            : piece,
+        ),
+      };
     case "REMOVE_ACTION": {
       const plan = state.plan
-        .filter((piece) => piece.actionId !== action.id)
+        .filter((piece) => piece.id !== action.id)
         .map((piece, index) => ({ ...piece, order: index + 1 }));
       return {
         ...state,
@@ -348,7 +378,7 @@ function reducer(state: GameState, action: Action): GameState {
       return {
         ...state,
         plan: state.plan.map((piece) =>
-          piece.actionId === action.id
+          piece.id === action.id
             ? { ...piece, x: action.x, y: action.y, zone: action.zone }
             : piece,
         ),
@@ -361,7 +391,7 @@ function reducer(state: GameState, action: Action): GameState {
       return {
         ...state,
         plan: state.plan.map((piece) =>
-          piece.actionId === action.id
+          piece.id === action.id
             ? {
                 ...piece,
                 settings: { ...piece.settings, [action.key]: action.value },

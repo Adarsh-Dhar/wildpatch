@@ -63,6 +63,7 @@ export type PlacedPiece = {
   x: number;
   y: number;
   order: number;
+  rotation?: number;
   settings: {
     openness?: number;
     density?: number;

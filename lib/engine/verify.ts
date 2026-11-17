@@ -1,5 +1,6 @@
 import { actionCost, isActionZoneValid, restorationActions } from "./actions";
 import { dailyScenario, investigationTools } from "./scenario";
+import { scenarioTruth } from "./scenario-private";
 import type {
   ComponentId,
   Conditions,
@@ -14,7 +15,7 @@ const clamp = (value: number, maximum: number) =>
 const severities: Severity[] = ["mild", "moderate", "severe"];
 
 function diagnosisScore(submission: Submission): number {
-  const truth = dailyScenario.truth;
+  const truth = scenarioTruth;
   const correct = submission.cause === truth.cause;
   const selected = new Set(submission.components);
   const expected = new Set<ComponentId>(truth.components);
@@ -72,7 +73,7 @@ function applyEffects(
 
 export function verify(submission: Submission): Report {
   const notes: Report["notes"] = [];
-  const correctCause = submission.cause === dailyScenario.truth.cause;
+  const correctCause = submission.cause === scenarioTruth.cause;
   let intervention = 0;
   let hydrologySeen = false;
   let plantingAfterHydrology = false;
