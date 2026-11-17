@@ -231,7 +231,7 @@ export function WildpatchField({
     <section className={`restore-field-wrap scene-${mode}`} aria-label="Willow Fen interactive field">
       <div
         ref={fieldRef}
-        className={`restore-field ${scanZone ? "site-scanning" : ""}`}
+        className="restore-field"
         aria-label="Willow Fen field. Drag or pinch empty land to move the map."
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
