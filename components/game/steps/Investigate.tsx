@@ -51,8 +51,13 @@ export function Investigate() {
       ),
     [state.selectedZone],
   );
-  const addTool = (id: ToolId) => {
-    if (state.toolsUsed.includes(id) || scanning) return;
+  const toggleTool = (id: ToolId) => {
+    if (scanning) return;
+    if (state.toolsUsed.includes(id)) {
+      dispatch({ type: "REMOVE_TOOL", id });
+      setNewEvidence((current) => (current === id ? null : current));
+      return;
+    }
     const tool = investigationTools.find((item) => item.id === id);
     if (!tool) return;
     if (state.investigationPoints < tool.cost) {
@@ -151,6 +156,15 @@ export function Investigate() {
         </div>
         <div className="map-legend">
           <span>Tap a site to focus your fieldwork</span>
+          {state.selectedZone && (
+            <button
+              className="clear-focus-button"
+              aria-label="Clear selected site focus"
+              onClick={() => dispatch({ type: "SET_ZONE", zone: null })}
+            >
+              Clear focus <X aria-hidden="true" />
+            </button>
+          )}
           <button
             className="notebook-button"
             onClick={() => setNotebookOpen(true)}
@@ -190,9 +204,14 @@ export function Investigate() {
               key={tool.id}
               type="button"
               className={`tool-card ${used ? "tool-picked" : ""} ${isScanning ? "tool-scanning" : ""} ${state.investigationPoints < tool.cost ? "tool-unaffordable" : ""}`}
-              disabled={used || Boolean(scanning)}
-              onClick={() => addTool(tool.id)}
+              disabled={Boolean(scanning)}
+              onClick={() => toggleTool(tool.id)}
               aria-pressed={used}
+              aria-label={
+                used
+                  ? `Remove ${tool.name} and refund ${tool.cost} research points`
+                  : `Use ${tool.name} for ${tool.cost} research points`
+              }
             >
               <span className="tool-icon">
                 <Search aria-hidden="true" />
@@ -214,6 +233,11 @@ export function Investigate() {
               <small>
                 {tool.tag} · {tool.note}
               </small>
+              {used && (
+                <small className="tool-remove-hint">
+                  Used · select to remove{tool.cost > 0 ? " and refund points" : ""}
+                </small>
+              )}
               {isScanning && <span className="scan-label">{scanHint}</span>}
             </button>
           );

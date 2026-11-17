@@ -60,6 +60,7 @@ type Action =
   | { type: "SET_STAGE"; stage: Stage }
   | { type: "VIEW_LAST_REPORT" }
   | { type: "USE_TOOL"; id: ToolId }
+  | { type: "REMOVE_TOOL"; id: ToolId }
   | { type: "PIN_CLUE"; id: ToolId }
   | { type: "SET_ZONE"; zone: string | null }
   | { type: "USE_HINT" }
@@ -156,6 +157,20 @@ function reducer(state: GameState, action: Action): GameState {
         investigationPoints: state.investigationPoints - cost,
         toolsUsed: [...state.toolsUsed, action.id],
         toast: "",
+      };
+    }
+    case "REMOVE_TOOL": {
+      if (!state.toolsUsed.includes(action.id)) return state;
+      const cost = pointCost(action.id);
+      return {
+        ...state,
+        investigationPoints: Math.min(12, state.investigationPoints + cost),
+        toolsUsed: state.toolsUsed.filter((id) => id !== action.id),
+        pinnedClues: state.pinnedClues.filter((id) => id !== action.id),
+        toast:
+          cost > 0
+            ? `${cost} research ${cost === 1 ? "point" : "points"} refunded.`
+            : "Quick observation removed from your notebook.",
       };
     }
     case "PIN_CLUE":
