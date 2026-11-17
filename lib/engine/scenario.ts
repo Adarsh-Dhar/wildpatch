@@ -1,4 +1,4 @@
-import type { CauseId, ComponentId, Conditions, ToolId } from "@/lib/types";
+import type { CauseId, ComponentId, Conditions, FieldZone, ToolId } from "@/lib/types";
 
 export const initialConditions: Conditions = {
   water: 35,
@@ -136,6 +136,18 @@ export const investigationTools: {
     visual: "quick",
   },
 ];
+
+export const investigationToolZones: Record<ToolId, FieldZone[]> = {
+  water: ["marsh", "ditch"],
+  soil: ["marsh", "bank"],
+  vegetation: ["marsh"],
+  wildlife: ["marsh", "upland"],
+  historical: ["ditch"],
+  terrain: ["ditch", "stream"],
+  habitat: ["bank"],
+  records: ["stream"],
+  quick: ["ditch", "stream", "marsh", "bank", "upland"],
+};
 
 export const toolEvidence: Record<
   ToolId,

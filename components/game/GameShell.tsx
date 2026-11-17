@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check, ClipboardCheck, Feather, Sparkles } from "lucide-react";
 import { GameProvider, useGame } from "@/lib/engine/store";
+import { DragProvider } from "@/lib/hooks/useDrag";
+import { WildpatchField } from "@/components/field/WildpatchField";
 import { GameDataProvider, type GameData } from "@/lib/data/context";
 import { assetUrl } from "@/lib/config";
 import { SettingsProvider, useSettings } from "@/lib/ui/settings-context";
@@ -29,7 +31,9 @@ export default function GameShell({ initialData }: { initialData: GameData }) {
     <SettingsProvider>
       <GameDataProvider data={initialData}>
         <GameProvider>
-          <GameShellContent />
+          <DragProvider>
+            <GameShellContent />
+          </DragProvider>
         </GameProvider>
       </GameDataProvider>
     </SettingsProvider>
@@ -128,6 +132,22 @@ function GameShellContent() {
           </div>
         </aside>
         <div className="game-main-column">
+          {state.tab === "Today" && (
+            <WildpatchField
+              simulate={state.simulateProjection}
+              mode={
+                state.stage === "Investigate"
+                  ? "investigate"
+                  : state.stage === "Diagnose"
+                    ? "diagnose"
+                    : state.stage === "Restore"
+                      ? "restore"
+                      : state.stage === "Report"
+                        ? "report"
+                        : "briefing"
+              }
+            />
+          )}
           <GameErrorBoundary key={state.tab}>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div

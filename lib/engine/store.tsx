@@ -7,7 +7,7 @@ import {
   useReducer,
   type ReactNode,
 } from "react";
-import { restorationActions } from "./actions";
+import { actionCost, restorationActions } from "./actions";
 import { investigationTools } from "./scenario";
 import type {
   ActionId,
@@ -20,15 +20,18 @@ import type {
   Submission,
   Tab,
   ToolId,
+  FieldZone,
+  PlacedPiece,
+  EvidenceRelation,
 } from "@/lib/types";
-
-type FieldPiece = { actionId: ActionId; x: number; y: number; zone: string };
 export type GameState = {
   tab: Tab;
   stage: Stage;
   investigationPoints: number;
   toolsUsed: ToolId[];
+  toolPlacements: Partial<Record<ToolId, { x: number; y: number; zone: FieldZone; valid: boolean }>>;
   pinnedClues: ToolId[];
+  clueRelations: Partial<Record<ToolId, Partial<Record<CauseId, EvidenceRelation>>>>;
   selectedZone: string | null;
   hintUsed: boolean;
   cause: CauseId | null;
@@ -36,8 +39,9 @@ export type GameState = {
   components: ComponentId[];
   severity: Severity | null;
   diagnosisLocked: boolean;
-  plan: ActionId[];
-  fieldPieces: FieldPiece[];
+  plan: PlacedPiece[];
+  selectedPieceId: string | null;
+  simulateProjection: boolean;
   pendingReport: Report | null;
   report: Report | null;
   lastReport: Report | null;
@@ -59,9 +63,10 @@ type Action =
   | { type: "SET_TAB"; tab: Tab }
   | { type: "SET_STAGE"; stage: Stage }
   | { type: "VIEW_LAST_REPORT" }
-  | { type: "USE_TOOL"; id: ToolId }
+  | { type: "USE_TOOL"; id: ToolId; zone?: FieldZone; x?: number; y?: number; valid?: boolean }
   | { type: "REMOVE_TOOL"; id: ToolId }
   | { type: "PIN_CLUE"; id: ToolId }
+  | { type: "SET_CLUE_RELATION"; toolId: ToolId; cause: CauseId; relation: EvidenceRelation }
   | { type: "SET_ZONE"; zone: string | null }
   | { type: "USE_HINT" }
   | { type: "SET_CAUSE"; cause: CauseId }
@@ -69,10 +74,19 @@ type Action =
   | { type: "TOGGLE_COMPONENT"; component: ComponentId }
   | { type: "SET_SEVERITY"; severity: Severity }
   | { type: "LOCK_DIAGNOSIS" }
-  | { type: "ADD_ACTION"; id: ActionId }
+  | {
+      type: "ADD_ACTION";
+      id: ActionId;
+      zone?: FieldZone;
+      x?: number;
+      y?: number;
+    }
   | { type: "REMOVE_ACTION"; id: ActionId }
   | { type: "MOVE_ACTION"; from: number; to: number }
-  | { type: "MOVE_PIECE"; id: ActionId; x: number; y: number; zone: string }
+  | { type: "MOVE_PIECE"; id: ActionId; x: number; y: number; zone: FieldZone }
+  | { type: "SELECT_PIECE"; id: string | null }
+  | { type: "UPDATE_PIECE_SETTING"; id: ActionId; key: "openness" | "density" | "width"; value: number }
+  | { type: "SET_SIMULATE"; value: boolean }
   | { type: "SET_OUTFIT"; outfit: 0 | 1 | 2 | 3 }
   | { type: "CELEBRATE" }
   | { type: "START_VERIFICATION" }
@@ -87,7 +101,9 @@ const initialState: GameState = {
   stage: "Briefing",
   investigationPoints: 12,
   toolsUsed: [],
+  toolPlacements: {},
   pinnedClues: [],
+  clueRelations: {},
   selectedZone: null,
   hintUsed: false,
   cause: null,
@@ -96,7 +112,8 @@ const initialState: GameState = {
   severity: null,
   diagnosisLocked: false,
   plan: [],
-  fieldPieces: [],
+  selectedPieceId: null,
+  simulateProjection: false,
   pendingReport: null,
   report: null,
   lastReport: null,
@@ -156,6 +173,15 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         investigationPoints: state.investigationPoints - cost,
         toolsUsed: [...state.toolsUsed, action.id],
+        toolPlacements: {
+          ...state.toolPlacements,
+          [action.id]: {
+            zone: action.zone ?? "marsh",
+            x: action.x ?? 50,
+            y: action.y ?? 57,
+            valid: action.valid ?? true,
+          },
+        },
         toast: "",
       };
     }
@@ -166,6 +192,8 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         investigationPoints: Math.min(12, state.investigationPoints + cost),
         toolsUsed: state.toolsUsed.filter((id) => id !== action.id),
+        toolPlacements: { ...state.toolPlacements, [action.id]: undefined },
+        clueRelations: { ...state.clueRelations, [action.id]: undefined },
         pinnedClues: state.pinnedClues.filter((id) => id !== action.id),
         toast:
           cost > 0
@@ -179,6 +207,17 @@ function reducer(state: GameState, action: Action): GameState {
         pinnedClues: state.pinnedClues.includes(action.id)
           ? state.pinnedClues.filter((id) => id !== action.id)
           : [...state.pinnedClues, action.id],
+      };
+    case "SET_CLUE_RELATION":
+      return {
+        ...state,
+        clueRelations: {
+          ...state.clueRelations,
+          [action.toolId]: {
+            ...state.clueRelations[action.toolId],
+            [action.cause]: action.relation,
+          },
+        },
       };
     case "SET_ZONE":
       return { ...state, selectedZone: action.zone };
@@ -237,33 +276,61 @@ function reducer(state: GameState, action: Action): GameState {
         toast: "Diagnosis locked. Build your plan.",
       };
     case "ADD_ACTION": {
-      if (state.plan.includes(action.id)) return state;
+      if (state.plan.some((piece) => piece.actionId === action.id)) return state;
       const item = restorationActions.find(
         (candidate) => candidate.id === action.id,
       );
       if (!item) return state;
       const index = state.plan.length;
-      const fieldPiece = {
+      const defaultZones: Record<ActionId, FieldZone> = {
+        "block-ditch": "ditch",
+        "restore-flow": "stream",
+        "plant-sedges": "marsh",
+        "monitor-water": "marsh",
+        "bank-control": "bank",
+        "remove-invasives": "marsh",
+        "fish-stocking": "stream",
+        fertilizer: "upland",
+        "wind-pump": "upland",
+        "habitat-corridor": "bank",
+      };
+      const piece: PlacedPiece = {
+        id: `${action.id}-${Date.now()}`,
         actionId: action.id,
-        x: 18 + (index % 4) * 21,
-        y: 36 + (index % 3) * 16,
-        zone: ["ditch", "stream", "marsh", "bank", "upland"][index % 5],
+        zone: action.zone ?? defaultZones[action.id],
+        x: action.x ?? [27, 68, 50, 77, 23][index % 5],
+        y: action.y ?? [34, 30, 57, 70, 75][index % 5],
+        order: index + 1,
+        settings:
+          action.id === "block-ditch"
+            ? { openness: 20 }
+            : action.id === "plant-sedges"
+              ? { density: 3 }
+              : action.id === "restore-flow"
+                ? { width: 2 }
+                : {},
       };
       return {
         ...state,
-        plan: [...state.plan, action.id],
-        fieldPieces: [...state.fieldPieces, fieldPiece],
+        plan: [...state.plan, piece],
+        selectedPieceId: piece.id,
         toast: item.warning ?? "",
       };
     }
-    case "REMOVE_ACTION":
+    case "REMOVE_ACTION": {
+      const plan = state.plan
+        .filter((piece) => piece.actionId !== action.id)
+        .map((piece, index) => ({ ...piece, order: index + 1 }));
       return {
         ...state,
-        plan: state.plan.filter((id) => id !== action.id),
-        fieldPieces: state.fieldPieces.filter(
-          (piece) => piece.actionId !== action.id,
-        ),
+        plan,
+        selectedPieceId:
+          state.selectedPieceId &&
+          plan.some((piece) => piece.id === state.selectedPieceId)
+            ? state.selectedPieceId
+            : null,
       };
+    }
     case "MOVE_ACTION": {
       if (
         action.from < 0 ||
@@ -275,14 +342,30 @@ function reducer(state: GameState, action: Action): GameState {
       const plan = [...state.plan];
       const [item] = plan.splice(action.from, 1);
       plan.splice(action.to, 0, item);
-      return { ...state, plan };
+      return { ...state, plan: plan.map((piece, index) => ({ ...piece, order: index + 1 })) };
     }
     case "MOVE_PIECE":
       return {
         ...state,
-        fieldPieces: state.fieldPieces.map((piece) =>
+        plan: state.plan.map((piece) =>
           piece.actionId === action.id
             ? { ...piece, x: action.x, y: action.y, zone: action.zone }
+            : piece,
+        ),
+      };
+    case "SELECT_PIECE":
+      return { ...state, selectedPieceId: action.id };
+    case "SET_SIMULATE":
+      return { ...state, simulateProjection: action.value };
+    case "UPDATE_PIECE_SETTING":
+      return {
+        ...state,
+        plan: state.plan.map((piece) =>
+          piece.actionId === action.id
+            ? {
+                ...piece,
+                settings: { ...piece.settings, [action.key]: action.value },
+              }
             : piece,
         ),
       };
@@ -345,7 +428,7 @@ function reducer(state: GameState, action: Action): GameState {
             ...state,
             stage: "Restore",
             plan: [],
-            fieldPieces: [],
+            selectedPieceId: null,
             report: null,
             pendingReport: null,
             verifying: false,
@@ -374,11 +457,7 @@ export function buildSubmission(state: GameState): Submission | null {
     severity: state.severity,
     plan: state.plan,
     toolsUsed: state.toolsUsed,
-    creditsSpent: state.plan.reduce(
-      (sum, id) =>
-        sum + (restorationActions.find((item) => item.id === id)?.cost ?? 0),
-      0,
-    ),
+    creditsSpent: state.plan.reduce((sum, piece) => sum + actionCost(piece), 0),
     researchPointsRemaining: state.investigationPoints,
   };
 }

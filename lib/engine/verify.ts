@@ -1,9 +1,9 @@
-import { restorationActions } from "./actions";
+import { actionCost, isActionZoneValid, restorationActions } from "./actions";
 import { dailyScenario, investigationTools } from "./scenario";
 import type {
-  ActionId,
   ComponentId,
   Conditions,
+  PlacedPiece,
   Report,
   Severity,
   Submission,
@@ -18,14 +18,11 @@ function diagnosisScore(submission: Submission): number {
   const correct = submission.cause === truth.cause;
   const selected = new Set(submission.components);
   const expected = new Set<ComponentId>(truth.components);
-  const intersection = [...selected].filter((item) =>
-    expected.has(item),
-  ).length;
+  const intersection = [...selected].filter((item) => expected.has(item)).length;
   const union = new Set([...selected, ...expected]).size;
   const componentPoints = union ? Math.round((4 * intersection) / union) : 0;
   const severityDistance = Math.abs(
-    severities.indexOf(submission.severity) -
-      severities.indexOf(truth.severity),
+    severities.indexOf(submission.severity) - severities.indexOf(truth.severity),
   );
   const severityPoints =
     severityDistance === 0 ? 4 : severityDistance === 1 ? 2 : 0;
@@ -41,12 +38,36 @@ function diagnosisScore(submission: Submission): number {
         ? -2
         : 0;
   return clamp(
-    (correct ? 12 : 0) +
-      componentPoints +
-      severityPoints +
-      confidenceAdjustment,
+    (correct ? 12 : 0) + componentPoints + severityPoints + confidenceAdjustment,
     20,
   );
+}
+
+function applyEffects(
+  conditions: Conditions,
+  piece: PlacedPiece,
+  effects: Partial<Conditions>,
+) {
+  for (const [key, baseDelta] of Object.entries(effects) as [
+    keyof Conditions,
+    number,
+  ][]) {
+    let delta = baseDelta;
+    if (piece.actionId === "block-ditch" && piece.settings.openness !== undefined)
+      delta = Math.round(baseDelta * (piece.settings.openness <= 20 ? 1 : 0.5));
+    if (piece.actionId === "plant-sedges" && piece.settings.density !== undefined)
+      delta = Math.round(
+        baseDelta *
+          ([3, 4].includes(piece.settings.density)
+            ? 1
+            : piece.settings.density === 5
+              ? 0.6
+              : 0.75),
+      );
+    if (piece.actionId === "restore-flow" && piece.settings.width !== undefined)
+      delta = Math.round(baseDelta * (piece.settings.width / 2));
+    conditions[key] = clamp(conditions[key] + delta, 100);
+  }
 }
 
 export function verify(submission: Submission): Report {
@@ -61,12 +82,22 @@ export function verify(submission: Submission): Report {
   let validSpend = 0;
   let recovery = 0;
   const conditions: Conditions = { ...dailyScenario.conditions };
+  const plan = [...submission.plan].sort((a, b) => a.order - b.order);
 
-  for (const id of submission.plan) {
-    const action = restorationActions.find((item) => item.id === id);
+  for (const piece of plan) {
+    const action = restorationActions.find((item) => item.id === piece.actionId);
     if (!action) continue;
+    if (!isActionZoneValid(piece.actionId, piece.zone)) {
+      hasWastedAction = true;
+      notes.push({
+        kind: "warn",
+        text: `${action.name} was placed outside a suitable zone and earned no restoration credit.`,
+      });
+      continue;
+    }
     const prerequisiteMet = action.requires !== "hydrology" || hydrologySeen;
     if (!prerequisiteMet) {
+      hasWastedAction = true;
       notes.push({
         kind: "warn",
         text: `${action.name} is less effective before water flow is restored.`,
@@ -77,11 +108,7 @@ export function verify(submission: Submission): Report {
       intervention -= 8;
       hasWastedAction = true;
       hasHarmfulAction = true;
-      for (const [key, delta] of Object.entries(action.effects) as [
-        keyof Conditions,
-        number,
-      ][])
-        conditions[key] = clamp(conditions[key] + delta, 100);
+      applyEffects(conditions, piece, action.effects);
       notes.push({
         kind: "fail",
         text: action.warning ?? `${action.name} may harm the wetland.`,
@@ -90,24 +117,30 @@ export function verify(submission: Submission): Report {
     }
     if (action.role === "risky" || action.role === "irrelevant") {
       hasWastedAction = true;
-      for (const [key, delta] of Object.entries(action.effects) as [
-        keyof Conditions,
-        number,
-      ][])
-        conditions[key] = clamp(conditions[key] + delta, 100);
+      applyEffects(conditions, piece, action.effects);
       notes.push({
         kind: "warn",
-        text:
-          action.warning ?? `${action.name} does not address the main problem.`,
+        text: action.warning ?? `${action.name} does not address the main problem.`,
       });
       continue;
     }
-    validSpend += action.cost;
-    if (action.id === "block-ditch") intervention += 14;
-    if (action.id === "restore-flow") intervention += 6;
+
+    validSpend += actionCost(piece);
+    if (action.id === "block-ditch") {
+      const openness = piece.settings.openness ?? 20;
+      intervention += Math.max(0, 14 - Math.ceil(Math.max(0, openness - 20) / 10));
+      if (openness > 20)
+        notes.push({ kind: "warn", text: "A more open gate lets too much water escape." });
+    }
+    if (action.id === "restore-flow") {
+      intervention += piece.settings.width === 1 ? 5 : piece.settings.width === 3 ? 7 : 6;
+    }
     if (action.id === "plant-sedges") {
-      intervention += 6;
+      const density = piece.settings.density ?? 3;
+      intervention += [3, 4].includes(density) ? 6 : density === 5 ? 4 : 5;
       plantingAfterHydrology = hydrologySeen;
+      if (density === 5)
+        notes.push({ kind: "warn", text: "Over-dense planting may crowd native wetland growth." });
     }
     if (action.id === "monitor-water") {
       intervention += 4;
@@ -115,11 +148,7 @@ export function verify(submission: Submission): Report {
     }
     if (action.id === "bank-control") intervention += 2;
     recovery += action.recoveryPoints;
-    for (const [key, delta] of Object.entries(action.effects) as [
-      keyof Conditions,
-      number,
-    ][])
-      conditions[key] = clamp(conditions[key] + delta, 100);
+    applyEffects(conditions, piece, action.effects);
     if (action.group === "Hydrology") hydrologySeen = true;
   }
 
@@ -134,32 +163,26 @@ export function verify(submission: Submission): Report {
           kind: "pass",
           text: "The drainage channel is the strongest explanation for the evidence.",
         }
-      : {
-          kind: "fail",
-          text: "The diagnosis missed the altered drainage pattern.",
-        },
+      : { kind: "fail", text: "The diagnosis missed the altered drainage pattern." },
   );
   const execution = clamp(
     (plantingAfterHydrology ? 8 : 0) +
       (monitoringAfterHydrology ? 4 : 0) +
-      (submission.plan.length >= 3 ? 4 : 0) +
-      (!hasWastedAction && submission.plan.length > 0 ? 4 : 0),
+      (plan.length >= 3 ? 4 : 0) +
+      (!hasWastedAction && plan.length > 0 ? 4 : 0),
     20,
   );
   if (plantingAfterHydrology)
-    notes.push({
-      kind: "pass",
-      text: "Water flow was restored before planting.",
-    });
+    notes.push({ kind: "pass", text: "Water flow was restored before planting." });
   const totalSpend = Math.max(
     submission.creditsSpent,
-    submission.plan.reduce(
-      (sum, id) =>
-        sum + (restorationActions.find((item) => item.id === id)?.cost ?? 0),
+    plan.reduce(
+      (sum, piece) =>
+        sum + actionCost(piece),
       0,
     ),
   );
-  const efficiency = submission.plan.length
+  const efficiency = plan.length
     ? clamp(
         Math.round((10 * validSpend) / Math.max(totalSpend, 1)) +
           (totalSpend <= 100 ? 5 : 0),
@@ -191,7 +214,7 @@ export function verify(submission: Submission): Report {
   ];
   const unlockedAchievements = [
     ...(diagnosis === 20 ? ["Perfect diagnosis"] : []),
-    ...(submission.plan.includes("block-ditch") && !hasHarmfulAction
+    ...(plan.some((piece) => piece.actionId === "block-ditch") && !hasHarmfulAction
       ? ["Hydrologist"]
       : []),
     ...(totalSpend <= 70 && total >= 80 ? ["Frugal field worker"] : []),
@@ -216,10 +239,7 @@ export function verify(submission: Submission): Report {
     returnedWildlife,
   };
 }
+
 export function verifySubmission(submission: Submission) {
   return verify(submission);
 }
-export const actionIsScoringValid = (id: ActionId) =>
-  ["primary", "supporting", "minor"].includes(
-    restorationActions.find((item) => item.id === id)?.role ?? "",
-  );
