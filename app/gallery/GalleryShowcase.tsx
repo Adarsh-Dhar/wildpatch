@@ -37,7 +37,6 @@ import {
   Toast,
 } from "@/components/game/ui-kit";
 import { SettingsProvider } from "@/lib/ui/settings-context";
-import { verificationResults } from "@/lib/engine/verify.test-cases";
 import type { Biome, ParcelStatus } from "@/lib/types";
 
 const moods: BlightMood[] = ["idle", "scheming", "defeated", "sneaky"];
@@ -302,25 +301,6 @@ export default function GalleryShowcase() {
             >
               Open confirm seal
             </button>
-          </div>
-        </section>
-        <section className="gallery-section">
-          <h2>Verifier test cases</h2>
-          <p>
-            Pure deterministic checks from <code>lib/engine/verify.ts</code>.
-          </p>
-          <div className="verify-cases">
-            {verificationResults.map((result) => (
-              <ParchmentCard key={result.label}>
-                <strong>{result.label}</strong>
-                <span>
-                  Expected {result.expected} · Actual {result.score}/100
-                </span>
-                <b className={result.passes ? "verify-pass" : "verify-fail"}>
-                  {result.passes ? "PASS" : "CHECK"}
-                </b>
-              </ParchmentCard>
-            ))}
           </div>
         </section>
         <BottomSheet

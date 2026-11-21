@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { playerResults } from "@/lib/db/schema";
 import { actionCost, restorationActions } from "@/lib/engine/actions";
 import { dailyScenario, investigationTools } from "@/lib/engine/scenario";
 import { verify } from "@/lib/engine/verify";
@@ -109,5 +113,43 @@ export async function POST(request: Request) {
     researchPointsRemaining: Math.max(0, dailyScenario.investigationPoints - researchSpent),
   };
 
-  return NextResponse.json(verify(serverSubmission));
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Sign in to save your field report." }, { status: 401 });
+  }
+
+  const report = verify(serverSubmission);
+  await db
+    .insert(playerResults)
+    .values({
+      id: crypto.randomUUID(),
+      userId: session.user.id,
+      scenarioId: dailyScenario.id,
+      score: report.total,
+      submission: serverSubmission,
+      report,
+    })
+    .onConflictDoUpdate({
+      target: [playerResults.userId, playerResults.scenarioId],
+      set: { score: report.total, submission: serverSubmission, report },
+      setWhere: sql`excluded.score > ${playerResults.score}`,
+    });
+
+  return NextResponse.json(report);
+}
+
+export async function GET(request: Request) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Sign in to view your saved result." }, { status: 401 });
+  }
+
+  const [result] = await db
+    .select({ score: playerResults.score, report: playerResults.report, createdAt: playerResults.createdAt })
+    .from(playerResults)
+    .where(and(eq(playerResults.userId, session.user.id), eq(playerResults.scenarioId, dailyScenario.id)))
+    .orderBy(desc(playerResults.score))
+    .limit(1);
+
+  return NextResponse.json(result ?? null);
 }

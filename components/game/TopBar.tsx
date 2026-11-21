@@ -4,9 +4,11 @@ import { Coins, Flame, Leaf, Menu, Search, Sprout } from "lucide-react";
 import { useGame } from "@/lib/engine/store";
 import { actionCost } from "@/lib/engine/actions";
 import { Restorer } from "./art/Restorer";
+import { authClient, useSession } from "@/lib/auth-client";
 
 export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { state, dispatch } = useGame();
+  const { data: session } = useSession();
   const spent = state.plan.reduce((sum, piece) => sum + actionCost(piece), 0);
   return (
     <header className="topbar game-topbar">
@@ -27,6 +29,15 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
           <small>FIELD JOURNAL · DAY 01</small>
         </span>
       </button>
+      <div className="player-auth">
+        {session?.user ? (
+          <button type="button" onClick={() => void authClient.signOut()}>
+            Sign out
+          </button>
+        ) : (
+          <a href="/sign-in">Sign in</a>
+        )}
+      </div>
       <div className="hud" aria-label="Player progress">
         <span className="hud-level">
           <Leaf aria-hidden="true" /> LVL 12

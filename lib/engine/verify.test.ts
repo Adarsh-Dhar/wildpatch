@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/auth", () => ({
+  auth: { api: { getSession: vi.fn(async () => null) } },
+}));
 import { POST } from "@/app/api/verify/route";
 import { verificationCases, verificationResults } from "./verify.test-cases";
 
@@ -7,7 +11,7 @@ describe("restoration verifier", () => {
     expect(passes).toBe(true);
   });
 
-  it("returns a report for a valid server-verified submission", async () => {
+  it("requires authentication before saving a valid submission", async () => {
     const response = await POST(
       new Request("http://localhost/api/verify", {
         method: "POST",
@@ -16,11 +20,10 @@ describe("restoration verifier", () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    const report = await response.json();
-    expect(report.total).toBeGreaterThanOrEqual(0);
-    expect(report.total).toBeLessThanOrEqual(100);
-    expect(report.breakdown).toHaveProperty("diagnosis");
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Sign in to save your field report.",
+    });
   });
 
   it("rejects a plan that exceeds the server-side credit budget", async () => {

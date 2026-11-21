@@ -9708,3 +9708,24 @@ html[data-reduced-motion] .world-cloud {
   .restore-tool-belt { grid-template-rows: 24px 75px; max-height: 130px; }
   .scene-restore .restore-field-controls, .scene-restore .restore-field-coordinates { bottom: 140px; }
 }
+
+.auth-page { min-height: 100svh; display: grid; place-items: center; padding: 24px; background: #eae5d6; color: #23301f; }
+.auth-back { position: absolute; top: 24px; left: max(24px, calc((100vw - 480px) / 2)); color: #3f5b3a; font-size: 13px; font-weight: 700; text-decoration: none; }
+.auth-card { width: min(100%, 440px); border: 1px solid #dcd3bb; border-radius: 20px; padding: clamp(24px, 6vw, 40px); background: #faf6ea; box-shadow: 0 12px 36px #25331e18; }
+.auth-card h1 { margin: 12px 0 8px; font: 600 36px/1.1 var(--font-fraunces), Georgia, serif; }
+.auth-card > p { margin: 0 0 24px; color: #747360; line-height: 1.55; }
+.auth-form { display: grid; gap: 16px; }
+.auth-form label { display: grid; gap: 7px; color: #3f5b3a; font-size: 13px; font-weight: 700; }
+.auth-form input { width: 100%; min-height: 46px; border: 1px solid #dcd3bb; border-radius: 10px; padding: 10px 12px; background: #fffdf7; color: #23301f; font: inherit; }
+.auth-form input:focus-visible { outline: 3px solid #6e9a5b; outline-offset: 2px; }
+.auth-submit { min-height: 48px; border: 0; border-radius: 12px; padding: 12px 16px; background: #3f5b3a; color: #fffdf5; font-weight: 700; }
+.auth-submit:disabled { opacity: .65; cursor: wait; }
+.auth-switch { margin: 0; color: #747360; text-align: center; font-size: 13px; }
+.auth-switch button { border: 0; padding: 0; background: none; color: #3f5b3a; font-weight: 700; text-decoration: underline; }
+.auth-error { margin: 0; color: #8c4538; font-size: 13px; }
+.player-auth { display: flex; align-items: center; }
+.player-auth a, .player-auth button { border: 1px solid #dcd3bb; border-radius: 999px; padding: 7px 11px; background: #faf6ea; color: #3f5b3a; font-size: 11px; font-weight: 700; text-decoration: none; }
+@media (max-width: 520px) {
+  .auth-page { padding: 72px 18px 24px; }
+  .auth-back { top: 22px; left: 20px; }
+}
