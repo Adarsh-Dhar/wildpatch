@@ -55,6 +55,21 @@ export type Conditions = {
   vegetation: number;
   biodiversity: number;
 };
+export type FieldZone = "ditch" | "stream" | "marsh" | "bank" | "upland";
+export type PlacedPiece = {
+  id: string;
+  actionId: ActionId;
+  zone: FieldZone;
+  x: number;
+  y: number;
+  order: number;
+  rotation?: number;
+  settings: {
+    openness?: number;
+    density?: number;
+    width?: number;
+  };
+};
 export type EvidenceRelation = "supports" | "contradicts" | "neutral";
 export type EvidenceNote = { kind: "pass" | "warn" | "fail"; text: string };
 export type Breakdown = {
@@ -69,7 +84,7 @@ export type Submission = {
   confidence: Confidence;
   components: ComponentId[];
   severity: Severity;
-  plan: ActionId[];
+  plan: PlacedPiece[];
   toolsUsed: ToolId[];
   creditsSpent: number;
   researchPointsRemaining?: number;

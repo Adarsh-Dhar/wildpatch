@@ -10,6 +10,7 @@ import {
   Sprout,
 } from "lucide-react";
 import { useGame } from "@/lib/engine/store";
+import { actionCost } from "@/lib/engine/actions";
 import { useSettings } from "@/lib/ui/settings-context";
 import { assetUrl, gameConfig } from "@/lib/config";
 import { Blight } from "../art/Blight";
@@ -47,20 +48,7 @@ export function Briefing() {
       Boolean(
         state.report &&
           state.plan.reduce(
-            (sum, id) =>
-              sum +
-              ({
-                "block-ditch": 35,
-                "restore-flow": 25,
-                "plant-sedges": 15,
-                "monitor-water": 10,
-                "bank-control": 20,
-                "remove-invasives": 20,
-                "fish-stocking": 20,
-                fertilizer: 10,
-                "wind-pump": 20,
-                "habitat-corridor": 25,
-              }[id] ?? 0),
+            (sum, piece) => sum + actionCost(piece),
             0,
           ) <= 100,
       ),

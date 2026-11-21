@@ -1,4 +1,4 @@
-import type { CauseId, ComponentId, Conditions, ToolId } from "@/lib/types";
+import type { CauseId, Conditions, FieldZone, ToolId } from "@/lib/types";
 
 export const initialConditions: Conditions = {
   water: 35,
@@ -14,16 +14,6 @@ export const dailyScenario = {
   difficulty: "intermediate" as const,
   credits: 100,
   investigationPoints: 12,
-  truth: {
-    cause: "drainage" as CauseId,
-    components: [
-      "hydrology",
-      "soil",
-      "vegetation",
-      "wildlife",
-    ] as ComponentId[],
-    severity: "moderate" as const,
-  },
   conditions: initialConditions,
 };
 
@@ -137,21 +127,14 @@ export const investigationTools: {
   },
 ];
 
-export const toolEvidence: Record<
-  ToolId,
-  Partial<Record<CauseId, "supports" | "contradicts">>
-> = {
-  water: { drainage: "supports", drought: "supports", nutrient: "contradicts" },
-  soil: { drainage: "supports", drought: "supports" },
-  vegetation: {
-    drainage: "supports",
-    nutrient: "contradicts",
-    invasive: "contradicts",
-  },
-  wildlife: {},
-  historical: { drainage: "supports" },
-  terrain: { drainage: "supports", inflow: "contradicts" },
-  habitat: {},
-  records: { inflow: "contradicts", drought: "contradicts" },
-  quick: {},
+export const investigationToolZones: Record<ToolId, FieldZone[]> = {
+  water: ["marsh", "ditch"],
+  soil: ["marsh", "bank"],
+  vegetation: ["marsh"],
+  wildlife: ["marsh", "upland"],
+  historical: ["ditch"],
+  terrain: ["ditch", "stream"],
+  habitat: ["bank"],
+  records: ["stream"],
+  quick: ["ditch", "stream", "marsh", "bank", "upland"],
 };

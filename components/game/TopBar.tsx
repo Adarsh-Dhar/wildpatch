@@ -2,16 +2,12 @@
 
 import { Coins, Flame, Leaf, Menu, Search, Sprout } from "lucide-react";
 import { useGame } from "@/lib/engine/store";
-import { restorationActions } from "@/lib/engine/actions";
+import { actionCost } from "@/lib/engine/actions";
 import { Restorer } from "./art/Restorer";
 
 export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { state, dispatch } = useGame();
-  const spent = state.plan.reduce(
-    (sum, id) =>
-      sum + (restorationActions.find((item) => item.id === id)?.cost ?? 0),
-    0,
-  );
+  const spent = state.plan.reduce((sum, piece) => sum + actionCost(piece), 0);
   return (
     <header className="topbar game-topbar">
       <button

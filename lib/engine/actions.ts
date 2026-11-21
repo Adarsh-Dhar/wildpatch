@@ -1,4 +1,10 @@
-import type { ActionId, ComponentId, Conditions } from "@/lib/types";
+import type {
+  ActionId,
+  ComponentId,
+  Conditions,
+  FieldZone,
+  PlacedPiece,
+} from "@/lib/types";
 
 export type RestorationAction = {
   id: ActionId;
@@ -172,21 +178,57 @@ export const affectedComponents: Record<ActionId, ComponentId[]> = {
   "habitat-corridor": ["wildlife"],
 };
 
+const validZones: Partial<Record<ActionId, FieldZone[]>> = {
+  "block-ditch": ["ditch"],
+  "restore-flow": ["stream", "ditch"],
+  "plant-sedges": ["marsh", "bank"],
+  "monitor-water": ["ditch", "stream", "marsh", "bank"],
+};
+
+export function actionCost(piece: PlacedPiece) {
+  const baseCost = restorationActions.find((item) => item.id === piece.actionId)?.cost ?? 0;
+  if (piece.actionId === "block-ditch")
+    return baseCost + Math.ceil(Math.max(0, (piece.settings.openness ?? 20) - 20) / 20);
+  if (piece.actionId === "plant-sedges")
+    return baseCost + (piece.settings.density ?? 3) - 3;
+  if (piece.actionId === "restore-flow")
+    return baseCost + ((piece.settings.width ?? 2) - 2) * 5;
+  return baseCost;
+}
+
+export function isActionZoneValid(actionId: ActionId, zone: FieldZone) {
+  return validZones[actionId]?.includes(zone) ?? true;
+}
+
 export function projectConditions(
-  plan: ActionId[],
+  plan: PlacedPiece[],
   initial: Conditions,
 ): Conditions {
   const result = { ...initial };
   let hydrologySeen = false;
-  for (const id of plan) {
-    const action = restorationActions.find((item) => item.id === id);
-    if (!action || (action.requires === "hydrology" && !hydrologySeen))
+  for (const piece of [...plan].sort((a, b) => a.order - b.order)) {
+    const action = restorationActions.find(
+      (item) => item.id === piece.actionId,
+    );
+    if (
+      !action ||
+      !isActionZoneValid(piece.actionId, piece.zone) ||
+      (action.requires === "hydrology" && !hydrologySeen)
+    )
       continue;
     for (const [key, delta] of Object.entries(action.effects) as [
       keyof Conditions,
       number,
-    ][])
-      result[key] = Math.max(0, Math.min(100, result[key] + delta));
+    ][]) {
+      let adjusted = delta;
+      if (piece.actionId === "block-ditch" && piece.settings.openness !== undefined)
+        adjusted = Math.round(delta * (piece.settings.openness <= 20 ? 1 : 0.5));
+      if (piece.actionId === "plant-sedges" && piece.settings.density !== undefined)
+        adjusted = Math.round(delta * (piece.settings.density === 3 || piece.settings.density === 4 ? 1 : 0.6));
+      if (piece.actionId === "restore-flow" && piece.settings.width !== undefined)
+        adjusted = Math.round(delta * (piece.settings.width / 2));
+      result[key] = Math.max(0, Math.min(100, result[key] + adjusted));
+    }
     if (
       action.group === "Hydrology" &&
       ["primary", "supporting"].includes(action.role)

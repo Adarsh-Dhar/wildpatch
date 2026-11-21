@@ -1,13 +1,21 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Fraunces, IBM_Plex_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans" });
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
+const dmSans = localFont({
+  src: "../public/fonts/geist-regular.ttf",
+  variable: "--font-dm-sans",
+  display: "swap",
+});
+const fraunces = localFont({
+  src: "../public/fonts/geist-serif-regular.ttf",
+  variable: "--font-fraunces",
+  display: "swap",
+});
+const plexMono = localFont({
+  src: "../public/fonts/geist-mono-regular.ttf",
   variable: "--font-plex-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
