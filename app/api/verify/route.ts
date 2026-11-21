@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { playerResults } from "@/lib/db/schema";
 import { actionCost, restorationActions } from "@/lib/engine/actions";
-import { dailyScenario, investigationTools } from "@/lib/engine/scenario";
+import { getDailyScenario, investigationTools } from "@/lib/engine/scenario";
+import { getScenarioTruth } from "@/lib/engine/scenario-private";
 import { verify } from "@/lib/engine/verify";
 import type {
   ActionId,
@@ -34,9 +39,9 @@ function isPiece(value: unknown): value is PlacedPiece {
   if (!isRecord(value) || !isRecord(value.settings)) return false;
   const { settings } = value;
   const settingsAreValid =
-    (settings.openness === undefined || isNumberBetween(settings.openness, 0, 100)) &&
-    (settings.density === undefined || isNumberBetween(settings.density, 1, 5)) &&
-    (settings.width === undefined || isNumberBetween(settings.width, 1, 3));
+    (settings.openness === undefined || (Number.isInteger(settings.openness) && isNumberBetween(settings.openness, 0, 100))) &&
+    (settings.density === undefined || (Number.isInteger(settings.density) && isNumberBetween(settings.density, 1, 5))) &&
+    (settings.width === undefined || (Number.isInteger(settings.width) && isNumberBetween(settings.width, 1, 3)));
 
   return (
     typeof value.id === "string" && value.id.length > 0 && value.id.length <= 100 &&
@@ -53,10 +58,10 @@ function isPiece(value: unknown): value is PlacedPiece {
 function parseSubmission(value: unknown): Submission | null {
   if (!isRecord(value) || !Array.isArray(value.components) || !Array.isArray(value.plan) || !Array.isArray(value.toolsUsed)) return null;
   if (!causes.has(value.cause as CauseId) || !confidences.has(value.confidence as Confidence) || !severities.has(value.severity as Severity)) return null;
-  if (value.components.length > components.size || !value.components.every((item) => components.has(item as ComponentId))) return null;
+  if (value.components.length === 0 || value.components.length > components.size || !value.components.every((item) => components.has(item as ComponentId))) return null;
   if (new Set(value.components).size !== value.components.length) return null;
   if (value.plan.length === 0 || value.plan.length > 20 || !value.plan.every(isPiece)) return null;
-  if (value.toolsUsed.length > toolIds.size || !value.toolsUsed.every((item) => toolIds.has(item as ToolId))) return null;
+  if (value.toolsUsed.length < 3 || value.toolsUsed.length > toolIds.size || !value.toolsUsed.every((item) => toolIds.has(item as ToolId))) return null;
   if (new Set(value.toolsUsed).size !== value.toolsUsed.length) return null;
 
   const plan = value.plan as PlacedPiece[];
@@ -83,6 +88,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid report." }, { status: 400 });
   }
 
+  const dailyScenario = getDailyScenario();
+  if (isRecord(body) && body.scenarioId !== dailyScenario.id) {
+    return NextResponse.json({ error: "This daily challenge has changed. Reload the field to continue." }, { status: 409 });
+  }
+
   const submission = parseSubmission(body);
   if (!submission) {
     return NextResponse.json({ error: "Invalid report." }, { status: 400 });
@@ -92,11 +102,65 @@ export async function POST(request: Request) {
     (total, id) => total + (investigationTools.find((tool) => tool.id === id)?.cost ?? 0),
     0,
   );
+  const creditsSpent = submission.plan.reduce(
+    (total, piece) => total + actionCost(piece),
+    0,
+  );
+  if (
+    researchSpent > dailyScenario.investigationPoints ||
+    creditsSpent > dailyScenario.credits
+  ) {
+    return NextResponse.json({ error: "The plan exceeds the available field budget." }, { status: 400 });
+  }
+
   const serverSubmission: Submission = {
     ...submission,
-    creditsSpent: submission.plan.reduce((total, piece) => total + actionCost(piece), 0),
+    creditsSpent,
     researchPointsRemaining: Math.max(0, dailyScenario.investigationPoints - researchSpent),
   };
 
-  return NextResponse.json(verify(serverSubmission));
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Sign in to save your field report." }, { status: 401 });
+  }
+
+  const report = verify(
+    serverSubmission,
+    dailyScenario,
+    getScenarioTruth(dailyScenario.id),
+  );
+  await db
+    .insert(playerResults)
+    .values({
+      id: crypto.randomUUID(),
+      userId: session.user.id,
+      scenarioId: dailyScenario.id,
+      score: report.total,
+      submission: serverSubmission,
+      report,
+    })
+    .onConflictDoUpdate({
+      target: [playerResults.userId, playerResults.scenarioId],
+      set: { score: report.total, submission: serverSubmission, report },
+      setWhere: sql`excluded.score > ${playerResults.score}`,
+    });
+
+  return NextResponse.json(report);
+}
+
+export async function GET(request: Request) {
+  const dailyScenario = getDailyScenario();
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session?.user) {
+    return NextResponse.json({ error: "Sign in to view your saved result." }, { status: 401 });
+  }
+
+  const [result] = await db
+    .select({ score: playerResults.score, report: playerResults.report, createdAt: playerResults.createdAt })
+    .from(playerResults)
+    .where(and(eq(playerResults.userId, session.user.id), eq(playerResults.scenarioId, dailyScenario.id)))
+    .orderBy(desc(playerResults.score))
+    .limit(1);
+
+  return NextResponse.json(result ?? null);
 }

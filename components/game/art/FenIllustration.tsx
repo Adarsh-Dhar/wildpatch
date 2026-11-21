@@ -1,9 +1,11 @@
 export function FenIllustration({
   restored = false,
   className = "",
+  siteName = "Willow Fen",
 }: {
   restored?: boolean;
   className?: string;
+  siteName?: string;
 }) {
   return (
     <div
@@ -11,8 +13,8 @@ export function FenIllustration({
       role="img"
       aria-label={
         restored
-          ? "Willow Fen beginning to recover"
-          : "Illustration of degraded Willow Fen"
+          ? `${siteName} beginning to recover`
+          : `Illustration of degraded ${siteName}`
       }
     >
       <div className="sun-disc" />
@@ -46,7 +48,7 @@ export function FenIllustration({
         <span className="heron-leg" />
       </div>
       <div className="fen-label">
-        <span className="label-dot" /> WILLOW FEN <span>·</span> WETLAND 04
+        <span className="label-dot" /> {siteName.toUpperCase()} <span>·</span> WETLAND
       </div>
       {!restored && (
         <div className="blight-wisp">

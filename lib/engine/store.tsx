@@ -68,7 +68,7 @@ type Action =
   | { type: "PIN_CLUE"; id: ToolId }
   | { type: "SET_CLUE_RELATION"; toolId: ToolId; cause: CauseId; relation: EvidenceRelation }
   | { type: "SET_ZONE"; zone: string | null }
-  | { type: "USE_HINT" }
+  | { type: "USE_HINT"; text: string }
   | { type: "SET_CAUSE"; cause: CauseId }
   | { type: "SET_CONFIDENCE"; confidence: Confidence }
   | { type: "TOGGLE_COMPONENT"; component: ComponentId }
@@ -94,7 +94,7 @@ type Action =
   | { type: "CELEBRATE" }
   | { type: "START_VERIFICATION" }
   | { type: "RECEIVE_REPORT"; report: Report }
-  | { type: "FAIL_VERIFICATION" }
+  | { type: "FAIL_VERIFICATION"; message?: string }
   | { type: "SHOW_REPORT" }
   | { type: "TRY_ANOTHER_PLAN" }
   | { type: "SET_TOAST"; message: string };
@@ -237,8 +237,7 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         hintUsed: true,
         investigationPoints: state.investigationPoints - 2,
-        toast:
-          "Rainfall looks normal. What else could remove water from a marsh?",
+        toast: action.text,
       };
     }
     case "SET_CAUSE":
@@ -416,7 +415,7 @@ function reducer(state: GameState, action: Action): GameState {
         ...state,
         pendingReport: null,
         verifying: false,
-        toast: "The field report could not be prepared. Try again.",
+        toast: action.message ?? "The field report could not be prepared. Try again.",
       };
     case "SHOW_REPORT": {
       if (!state.pendingReport) return state;

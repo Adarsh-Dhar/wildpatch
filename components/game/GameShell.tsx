@@ -6,7 +6,7 @@ import { Check, ClipboardCheck, Feather, Sparkles } from "lucide-react";
 import { GameProvider, useGame } from "@/lib/engine/store";
 import { DragProvider } from "@/lib/hooks/useDrag";
 import { WildpatchField } from "@/components/field/WildpatchField";
-import { GameDataProvider, type GameData } from "@/lib/data/context";
+import { GameDataProvider, useGameData, type GameData } from "@/lib/data/context";
 import { assetUrl } from "@/lib/config";
 import { SettingsProvider, useSettings } from "@/lib/ui/settings-context";
 import { TopBar } from "./TopBar";
@@ -42,6 +42,7 @@ export default function GameShell({ initialData }: { initialData: GameData }) {
 
 function GameShellContent() {
   const { state, dispatch } = useGame();
+  const { scenario } = useGameData();
   const { onboardingSeen, setOnboardingSeen } = useSettings();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [scoringOpen, setScoringOpen] = useState(false);
@@ -115,9 +116,9 @@ function GameShellContent() {
           <div className="desktop-field-art">
             <img
               src={assetUrl("wetland-dry.webp")}
-              alt="Willow Fen field preview"
+              alt={`${scenario.siteName} wetland field preview`}
             />
-            <span>WILLOW FEN · WETLAND 04</span>
+            <span>{scenario.siteName.toUpperCase()} · {scenario.biome.toUpperCase()}</span>
             <Sparkles aria-hidden="true" />
           </div>
           <h2>A field worth noticing.</h2>
@@ -189,6 +190,7 @@ function GameShellContent() {
       )}
       {state.toast && <Toast message={state.toast} onClose={dismissToast} />}
       <VerificationTransition
+        siteName={scenario.siteName}
         open={state.verifying}
         canSkip={transitionReady}
         onSkip={() => dispatch({ type: "SHOW_REPORT" })}
@@ -199,11 +201,13 @@ function GameShellContent() {
 }
 
 function VerificationTransition({
+  siteName,
   open,
   canSkip,
   onSkip,
   onReady,
 }: {
+  siteName: string;
   open: boolean;
   canSkip: boolean;
   onSkip: () => void;
@@ -242,7 +246,7 @@ function VerificationTransition({
           exit={{ opacity: 0 }}
         >
           <section className="verification-card">
-            <span className="eyebrow">WILLOW FEN · FIELD REPORT</span>
+              <span className="eyebrow">{siteName.toUpperCase()} · FIELD REPORT</span>
             <div className="verification-judge">
               <span className="judge-scroll">
                 <Feather aria-hidden="true" />

@@ -60,7 +60,7 @@ export function Report() {
     )
     .join("");
   const shareText = report
-    ? `WILDPATCH Day 01 🌿 ${report.total}/100\n${shareGrid} · Wetland · Streak ${state.streak}`
+    ? `WILDPATCH ${data.scenario.siteName} · ${data.scenario.challengeDate ?? "Daily"} · ${report.total}/100\n${shareGrid} · ${data.scenario.biome} · Streak ${state.streak}`
     : "";
   if (!report)
     return (
@@ -113,7 +113,7 @@ export function Report() {
             <br />
             <em>
               {mood === "approving"
-                ? "The fen is responding."
+                ? "The wetland is responding."
                 : mood === "thoughtful"
                   ? "Some choices need rethinking."
                   : "Keep learning from the land."}
@@ -121,7 +121,7 @@ export function Report() {
           </h1>
           <p>
             {mood === "approving"
-              ? "A thoughtful plan gives Willow Fen room to recover."
+              ? `A thoughtful plan gives ${data.scenario.siteName} room to recover.`
               : mood === "thoughtful"
                 ? "You made a start. The evidence can guide your next plan."
                 : "This plan needs another look at the field evidence."}
@@ -227,7 +227,7 @@ export function Report() {
           <div className="compare-base">
             <img
               src={assetUrl("wetland-dry.webp")}
-              alt="Willow Fen before restoration"
+              alt={`${data.scenario.siteName} before restoration`}
             />
           </div>
           <div
@@ -239,7 +239,7 @@ export function Report() {
           >
             <img
               src={assetUrl("wetland-recovering.webp")}
-              alt="Willow Fen projected recovery"
+              alt={`${data.scenario.siteName} projected recovery`}
             />
           </div>
           <input
@@ -295,7 +295,7 @@ export function Report() {
         <Blight mood={report.total >= 80 ? "defeated" : "scheming"} size={64} />
         <p>
           {report.total >= 80
-            ? "Blight drifts away as the fen finds room to recover."
+            ? "Blight drifts away as the wetland finds room to recover."
             : "Blight peeks through the reeds: “Not so fast…”"}
         </p>
       </section>
