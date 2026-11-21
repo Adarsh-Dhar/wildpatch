@@ -26,7 +26,7 @@ export function TopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
         </span>
         <span>
           <strong>wildpatch</strong>
-          <small>FIELD JOURNAL · DAY 01</small>
+          <small>DAILY FIELD JOURNAL</small>
         </span>
       </button>
       <div className="player-auth">

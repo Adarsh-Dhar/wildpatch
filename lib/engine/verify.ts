@@ -1,6 +1,6 @@
 import { actionCost, isActionZoneValid, restorationActions } from "./actions";
-import { dailyScenario, investigationTools } from "./scenario";
-import { scenarioTruth } from "./scenario-private";
+import { dailyScenario, investigationTools, type Scenario } from "./scenario";
+import { scenarioTruth, type ScenarioTruth } from "./scenario-private";
 import type {
   ComponentId,
   Conditions,
@@ -14,8 +14,10 @@ const clamp = (value: number, maximum: number) =>
   Math.max(0, Math.min(maximum, value));
 const severities: Severity[] = ["mild", "moderate", "severe"];
 
-function diagnosisScore(submission: Submission): number {
-  const truth = scenarioTruth;
+function diagnosisScore(
+  submission: Submission,
+  truth: ScenarioTruth,
+): number {
   const correct = submission.cause === truth.cause;
   const selected = new Set(submission.components);
   const expected = new Set<ComponentId>(truth.components);
@@ -71,9 +73,13 @@ function applyEffects(
   }
 }
 
-export function verify(submission: Submission): Report {
+export function verify(
+  submission: Submission,
+  scenario: Scenario = dailyScenario,
+  truth: ScenarioTruth = scenarioTruth,
+): Report {
   const notes: Report["notes"] = [];
-  const correctCause = submission.cause === scenarioTruth.cause;
+  const correctCause = submission.cause === truth.cause;
   let intervention = 0;
   let hydrologySeen = false;
   let plantingAfterHydrology = false;
@@ -82,12 +88,15 @@ export function verify(submission: Submission): Report {
   let hasHarmfulAction = false;
   let validSpend = 0;
   let recovery = 0;
-  const conditions: Conditions = { ...dailyScenario.conditions };
+  const conditions: Conditions = { ...scenario.conditions };
   const plan = [...submission.plan].sort((a, b) => a.order - b.order);
 
   for (const piece of plan) {
     const action = restorationActions.find((item) => item.id === piece.actionId);
     if (!action) continue;
+    const rule = truth.actionRules?.[piece.actionId];
+    const actionRole = rule?.role ?? action.role;
+    const effects = rule?.effects ?? action.effects;
     if (!isActionZoneValid(piece.actionId, piece.zone)) {
       hasWastedAction = true;
       notes.push({
@@ -105,20 +114,20 @@ export function verify(submission: Submission): Report {
       });
       continue;
     }
-    if (action.role === "harmful") {
+    if (actionRole === "harmful") {
       intervention -= 8;
       hasWastedAction = true;
       hasHarmfulAction = true;
-      applyEffects(conditions, piece, action.effects);
+      applyEffects(conditions, piece, effects);
       notes.push({
         kind: "fail",
         text: action.warning ?? `${action.name} may harm the wetland.`,
       });
       continue;
     }
-    if (action.role === "risky" || action.role === "irrelevant") {
+    if (actionRole === "risky" || actionRole === "irrelevant") {
       hasWastedAction = true;
-      applyEffects(conditions, piece, action.effects);
+      applyEffects(conditions, piece, effects);
       notes.push({
         kind: "warn",
         text: action.warning ?? `${action.name} does not address the main problem.`,
@@ -127,29 +136,33 @@ export function verify(submission: Submission): Report {
     }
 
     validSpend += actionCost(piece);
-    if (action.id === "block-ditch") {
-      const openness = piece.settings.openness ?? 20;
-      intervention += Math.max(0, 14 - Math.ceil(Math.max(0, openness - 20) / 10));
-      if (openness > 20)
-        notes.push({ kind: "warn", text: "A more open gate lets too much water escape." });
+    if (rule) {
+      intervention += rule.interventionPoints;
+    } else {
+      if (action.id === "block-ditch") {
+        const openness = piece.settings.openness ?? 20;
+        intervention += Math.max(0, 14 - Math.ceil(Math.max(0, openness - 20) / 10));
+        if (openness > 20)
+          notes.push({ kind: "warn", text: "A more open gate lets too much water escape." });
+      }
+      if (action.id === "restore-flow") {
+        intervention += piece.settings.width === 1 ? 5 : piece.settings.width === 3 ? 7 : 6;
+      }
+      if (action.id === "plant-sedges") {
+        const density = piece.settings.density ?? 3;
+        intervention += [3, 4].includes(density) ? 6 : density === 5 ? 4 : 5;
+        plantingAfterHydrology = hydrologySeen;
+        if (density === 5)
+          notes.push({ kind: "warn", text: "Over-dense planting may crowd native wetland growth." });
+      }
+      if (action.id === "monitor-water") {
+        intervention += 4;
+        monitoringAfterHydrology = hydrologySeen;
+      }
+      if (action.id === "bank-control") intervention += 2;
     }
-    if (action.id === "restore-flow") {
-      intervention += piece.settings.width === 1 ? 5 : piece.settings.width === 3 ? 7 : 6;
-    }
-    if (action.id === "plant-sedges") {
-      const density = piece.settings.density ?? 3;
-      intervention += [3, 4].includes(density) ? 6 : density === 5 ? 4 : 5;
-      plantingAfterHydrology = hydrologySeen;
-      if (density === 5)
-        notes.push({ kind: "warn", text: "Over-dense planting may crowd native wetland growth." });
-    }
-    if (action.id === "monitor-water") {
-      intervention += 4;
-      monitoringAfterHydrology = hydrologySeen;
-    }
-    if (action.id === "bank-control") intervention += 2;
-    recovery += action.recoveryPoints;
-    applyEffects(conditions, piece, action.effects);
+    recovery += rule?.recoveryPoints ?? action.recoveryPoints;
+    applyEffects(conditions, piece, effects);
     if (action.group === "Hydrology") hydrologySeen = true;
   }
 
@@ -157,14 +170,14 @@ export function verify(submission: Submission): Report {
     correctCause ? intervention : Math.round(intervention * 0.6),
     30,
   );
-  const diagnosis = diagnosisScore(submission);
+  const diagnosis = diagnosisScore(submission, truth);
   notes.push(
     correctCause
       ? {
           kind: "pass",
-          text: "The drainage channel is the strongest explanation for the evidence.",
+          text: truth.diagnosisMessage,
         }
-      : { kind: "fail", text: "The diagnosis missed the altered drainage pattern." },
+      : { kind: "fail", text: "The diagnosis does not match the strongest explanation for this site." },
   );
   const execution = clamp(
     (plantingAfterHydrology ? 8 : 0) +
@@ -241,6 +254,10 @@ export function verify(submission: Submission): Report {
   };
 }
 
-export function verifySubmission(submission: Submission) {
-  return verify(submission);
+export function verifySubmission(
+  submission: Submission,
+  scenario: Scenario = dailyScenario,
+  truth: ScenarioTruth = scenarioTruth,
+) {
+  return verify(submission, scenario, truth);
 }

@@ -20,9 +20,12 @@ export function Restore() {
     if (!submission) return;
     dispatch({ type: "START_VERIFICATION" });
     try {
-      dispatch({ type: "RECEIVE_REPORT", report: await submitSolution(submission) });
-    } catch {
-      dispatch({ type: "FAIL_VERIFICATION" });
+      dispatch({ type: "RECEIVE_REPORT", report: await submitSolution(submission, scenario.id) });
+    } catch (error) {
+      dispatch({
+        type: "FAIL_VERIFICATION",
+        message: error instanceof Error ? error.message : undefined,
+      });
     }
   };
   const reorder = (from: number, to: number) =>

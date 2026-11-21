@@ -1,4 +1,4 @@
-import { dailyScenario } from "./engine/scenario";
+import { getDailyScenario as selectDailyScenario } from "./engine/scenario";
 import {
   achievements,
   journalEntries,
@@ -18,7 +18,7 @@ const wait = (milliseconds: number) =>
   new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
 export async function getDailyScenario() {
   await wait(400);
-  return dailyScenario;
+  return selectDailyScenario();
 }
 export async function getLeaderboard(
   period: "daily" | "weekly" | "community" = "daily",
@@ -68,19 +68,14 @@ export async function getInitialGameData() {
       getProfile(),
       getRecentRestorations(),
     ]);
-  const { id, biome, difficulty, credits, investigationPoints, conditions } =
-    scenario;
+  const scenarioTools = investigationTools.map((tool) => ({
+    ...tool,
+    note: scenario.evidence[tool.id] ?? tool.note,
+  }));
   return {
-    scenario: {
-      id,
-      biome,
-      difficulty,
-      credits,
-      investigationPoints,
-      conditions,
-    },
+    scenario,
     causes,
-    investigationTools,
+    investigationTools: scenarioTools,
     restorationActions,
     stages,
     leaderboard: { daily, weekly, community },

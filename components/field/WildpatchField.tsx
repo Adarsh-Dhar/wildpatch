@@ -30,7 +30,7 @@ const art: Partial<Record<ActionId, string>> = {
   "wind-pump": assetUrl("wind-turbine.png"),
 };
 type Point = { x: number; y: number };
-const vagueReadout = "Not much to see here. Try another part of the fen.";
+const vagueReadout = "Not much to see here. Try another part of the wetland.";
 const actionGroups = ["All", "Hydrology", "Planting", "Invasives", "Erosion", "Water quality", "Habitat"] as const;
 const toolLabels: Record<ToolId, string> = {
   water: "Water probe",
@@ -117,7 +117,7 @@ export function WildpatchField({
   const placeTool = (toolId: ToolId, zone: FieldZone, x: number, y: number) => {
     if (state.toolsUsed.includes(toolId)) return;
     const valid = investigationToolZones[toolId].includes(zone);
-    if (!valid) dispatch({ type: "SET_TOAST", message: "Not much to see here. Try another part of the fen." });
+    if (!valid) dispatch({ type: "SET_TOAST", message: "Not much to see here. Try another part of the wetland." });
     setScanZone(zone);
     window.setTimeout(() => {
       dispatch({ type: "USE_TOOL", id: toolId, zone, x, y, valid });
@@ -247,19 +247,19 @@ export function WildpatchField({
     startDrag(event, { kind: "action", id, label: name });
 
   return (
-    <section className={`restore-field-wrap scene-${mode}`} aria-label="Willow Fen interactive field">
+    <section className={`restore-field-wrap scene-${mode}`} aria-label={`${scenario.siteName} interactive wetland field`}>
       <div
         ref={fieldRef}
         className="restore-field"
-        aria-label="Willow Fen field. Drag or pinch empty land to move the map."
+        aria-label={`${scenario.siteName} field. Drag or pinch empty land to move the map.`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
         <div className="restore-world" style={{ transform: `translate3d(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px), 0) scale(${view.scale})` }}>
-          <img className="restore-land restore-land-dry" src={assetUrl("wetland-dry.webp")} alt="Willow Fen wetlands with a drainage channel" draggable={false} />
-          <img className="restore-land restore-land-recovering" src={assetUrl("wetland-recovering.webp")} alt="Projected recovery of the Willow Fen wetlands" draggable={false} style={{ opacity: restorationPercent }} />
+          <img className="restore-land restore-land-dry" src={assetUrl("wetland-dry.webp")} alt={`${scenario.siteName} wetland field before restoration`} draggable={false} />
+          <img className="restore-land restore-land-recovering" src={assetUrl("wetland-recovering.webp")} alt={`Projected recovery of ${scenario.siteName}`} draggable={false} style={{ opacity: restorationPercent }} />
           {settings.placementGrid && <div className="restore-grid" aria-hidden="true" />}
           <div className="restore-zones">
             {zones.map((zone) => (

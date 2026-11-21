@@ -6,7 +6,7 @@ WILDPATCH is a daily ecological-restoration challenge. Players investigate a cha
 
 ## 2. Current implementation baseline
 
-The current application is a Next.js App Router prototype. It includes a five-stage wetland challenge, a browser UI for investigation and restoration planning, a deterministic scoring engine, a server-side `/api/verify` endpoint, and mock map, profile, reserve, and leaderboard data. The current live challenge is one Willow Fen wetland scenario. The answer key is consumed by server verification code and must remain server-only.
+The current application is a Next.js App Router prototype. It includes a five-stage game, a browser UI for investigation and restoration planning, a deterministic scoring engine, a server-side `/api/verify` endpoint, and mock map, profile, reserve, and leaderboard data. Three authored wetland scenarios are selected reproducibly by UTC challenge date; each daily challenge has a date-scoped ID. Scenario answer keys remain server-only.
 
 ## 3. MVP outcomes
 
@@ -107,7 +107,7 @@ Schema changes must be applied through the connected database integration and re
 
 ## 8. Current implementation status and known blockers
 
-- Implemented today: the Next.js prototype, one wetland challenge, deterministic scoring, server-side answer-key use, map/reserve/profile mock screens, and initial server validation tests.
-- Still outstanding: multi-biome scenario catalog and engine generalization, authenticated accounts, durable persistence, real leaderboard/reserve/world systems, AI authoring workflow, research/resources, and Devvit migration/integration.
+- Implemented today: the Next.js prototype, three data-driven wetland scenarios with UTC-date selection, private scenario answer keys and scoring rules, authenticated server-side scoring, persistent best results, and verifier/API tests.
+- Still outstanding: the 12-scenario target and playable forest/grassland biomes, database-backed immutable daily publication, real leaderboard/reserve/world systems, AI authoring workflow, expanded resources, and Devvit migration/integration.
 - The Neon integration is connected, but this workspace currently exposes no runtime `DATABASE_URL`; its schema inspection returned an error on the initial integration check. Runtime database work must wait until the integration provides its app connection variables and the live schema can be verified.
 - The existing project is a Next.js prototype, not a Devvit project. Devvit implementation needs the target app/platform setup and must be validated against Devvit's supported APIs rather than approximated with Next.js routes.

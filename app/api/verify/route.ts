@@ -4,7 +4,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { playerResults } from "@/lib/db/schema";
 import { actionCost, restorationActions } from "@/lib/engine/actions";
-import { dailyScenario, investigationTools } from "@/lib/engine/scenario";
+import { getDailyScenario, investigationTools } from "@/lib/engine/scenario";
+import { getScenarioTruth } from "@/lib/engine/scenario-private";
 import { verify } from "@/lib/engine/verify";
 import type {
   ActionId,
@@ -87,6 +88,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid report." }, { status: 400 });
   }
 
+  const dailyScenario = getDailyScenario();
+  if (isRecord(body) && body.scenarioId !== dailyScenario.id) {
+    return NextResponse.json({ error: "This daily challenge has changed. Reload the field to continue." }, { status: 409 });
+  }
+
   const submission = parseSubmission(body);
   if (!submission) {
     return NextResponse.json({ error: "Invalid report." }, { status: 400 });
@@ -118,7 +124,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sign in to save your field report." }, { status: 401 });
   }
 
-  const report = verify(serverSubmission);
+  const report = verify(
+    serverSubmission,
+    dailyScenario,
+    getScenarioTruth(dailyScenario.id),
+  );
   await db
     .insert(playerResults)
     .values({
@@ -139,6 +149,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  const dailyScenario = getDailyScenario();
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) {
     return NextResponse.json({ error: "Sign in to view your saved result." }, { status: 401 });

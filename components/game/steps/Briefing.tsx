@@ -10,28 +10,34 @@ import {
   Sprout,
 } from "lucide-react";
 import { useGame } from "@/lib/engine/store";
+import { useGameData } from "@/lib/data/context";
 import { actionCost } from "@/lib/engine/actions";
 import { useSettings } from "@/lib/ui/settings-context";
-import { assetUrl, gameConfig } from "@/lib/config";
+import { assetUrl } from "@/lib/config";
 import { Blight } from "../art/Blight";
 import { FenIllustration } from "../art/FenIllustration";
 import { AgentSpeechBubble, ChunkyButton, ParchmentCard } from "../ui-kit";
 
+function secondsUntilUtcMidnight() {
+  const now = new Date();
+  const nextChallenge = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() + 1,
+  );
+  return Math.max(0, Math.ceil((nextChallenge - now.getTime()) / 1000));
+}
+
 export function Briefing() {
   const { state, dispatch } = useGame();
+  const { scenario } = useGameData();
   const { settings } = useSettings();
   const todayReport = state.report ?? state.lastReport;
-  const [countdown, setCountdown] = useState(
-    gameConfig.challengeCountdownSeconds,
-  );
+  const [countdown, setCountdown] = useState(86_400);
   useEffect(() => {
-    const id = window.setInterval(
-      () =>
-        setCountdown((value) =>
-          value <= 0 ? gameConfig.challengeCountdownSeconds : value - 1,
-        ),
-      1000,
-    );
+    const updateCountdown = () => setCountdown(secondsUntilUtcMidnight());
+    updateCountdown();
+    const id = window.setInterval(updateCountdown, 1000);
     return () => window.clearInterval(id);
   }, []);
   const hours = String(Math.floor(countdown / 3600)).padStart(2, "0");
@@ -79,7 +85,7 @@ export function Briefing() {
         <img
           className="briefing-land"
           src={assetUrl("wetland-dry.webp")}
-          alt="A low-water Willow Fen wetland"
+          alt={`A low-water wetland at ${scenario.siteName}`}
         />
         <div className="briefing-vignette" />
         <div className="hero-stamp">
@@ -91,33 +97,25 @@ export function Briefing() {
           <Sprout aria-hidden="true" />
         </div>
         <Blight mood="scheming" className="briefing-blight" />
-        <FenIllustration className="briefing-scenery" />
+        <FenIllustration className="briefing-scenery" siteName={scenario.siteName} />
       </div>
       <AgentSpeechBubble className="briefing-quote">
-        I&apos;ve stirred up a little trouble at Willow Fen. Think you can
-        figure out why?
+        {scenario.story}
       </AgentSpeechBubble>
       <div className="mission-heading">
         <div className="eyebrow">
           <span className="eyebrow-dot" /> TODAY&apos;S RESTORATION{" "}
-          <span className="tiny-divider">/</span> INTERMEDIATE
+          <span className="tiny-divider">/</span> {scenario.difficulty.toUpperCase()}
         </div>
-        <h1>
-          Willow Fen
-          <br />
-          <em>is in trouble.</em>
-        </h1>
-        <p className="intro-copy">
-          Something has unsettled this quiet wetland. Follow the clues, find the
-          cause, and help the fen find its way back.
-        </p>
+        <h1>{scenario.headline}</h1>
+        <p className="intro-copy">{scenario.summary}</p>
       </div>
       <div className="brief-meta">
         <span>
-          <Coins aria-hidden="true" /> 100 credits
+          <Coins aria-hidden="true" /> {scenario.credits} credits
         </span>
         <span>
-          <Search aria-hidden="true" /> 12 research points
+          <Search aria-hidden="true" /> {scenario.investigationPoints} research points
         </span>
         <span>
           <Activity aria-hidden="true" /> ~3 min
@@ -129,36 +127,20 @@ export function Briefing() {
           <span className="note-number">WP—001</span>
         </div>
         <div className="mission-badges">
-          <span>WETLAND</span>
-          <span>INTERMEDIATE</span>
+          <span>{scenario.biome.toUpperCase()}</span>
+          <span>{scenario.difficulty.toUpperCase()}</span>
         </div>
-        <div className="symptom-row">
-          <span className="symptom-icon dry">
-            <Search aria-hidden="true" />
-          </span>
-          <div>
-            <strong>Falling water levels</strong>
-            <small>The fen sits 42cm below its seasonal norm</small>
+        {scenario.fieldNotes.map((note, index) => (
+          <div className="symptom-row" key={note.title}>
+            <span className={`symptom-icon ${["dry", "plant", "wildlife"][index % 3]}`}>
+              {index === 0 ? <Search aria-hidden="true" /> : <Sprout aria-hidden="true" />}
+            </span>
+            <div>
+              <strong>{note.title}</strong>
+              <small>{note.detail}</small>
+            </div>
           </div>
-        </div>
-        <div className="symptom-row">
-          <span className="symptom-icon plant">
-            <Sprout aria-hidden="true" />
-          </span>
-          <div>
-            <strong>Declining native sedges</strong>
-            <small>Marsh plants have declined by nearly a third</small>
-          </div>
-        </div>
-        <div className="symptom-row">
-          <span className="symptom-icon wildlife">
-            <Sprout aria-hidden="true" />
-          </span>
-          <div>
-            <strong>Fewer frogs and herons</strong>
-            <small>The wetland chorus has grown quiet</small>
-          </div>
-        </div>
+        ))}
         <div className="mission-objectives">
           {objectives.map(([label, done]) => (
             <span key={label} className={done ? "objective-done" : ""}>
@@ -191,7 +173,9 @@ export function Briefing() {
         </span>
         <span className="social-divider">·</span>
         <span>
-          Next challenge in {hours}:{minutes}:{seconds}
+          {countdown === 0
+            ? "The next challenge is ready. Reload to open it."
+            : `Next challenge in ${hours}:${minutes}:${seconds}`}
         </span>
       </div>
       {settings.reducedMotion && (
