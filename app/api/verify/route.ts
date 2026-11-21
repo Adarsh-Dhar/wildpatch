@@ -34,9 +34,9 @@ function isPiece(value: unknown): value is PlacedPiece {
   if (!isRecord(value) || !isRecord(value.settings)) return false;
   const { settings } = value;
   const settingsAreValid =
-    (settings.openness === undefined || isNumberBetween(settings.openness, 0, 100)) &&
-    (settings.density === undefined || isNumberBetween(settings.density, 1, 5)) &&
-    (settings.width === undefined || isNumberBetween(settings.width, 1, 3));
+    (settings.openness === undefined || (Number.isInteger(settings.openness) && isNumberBetween(settings.openness, 0, 100))) &&
+    (settings.density === undefined || (Number.isInteger(settings.density) && isNumberBetween(settings.density, 1, 5))) &&
+    (settings.width === undefined || (Number.isInteger(settings.width) && isNumberBetween(settings.width, 1, 3)));
 
   return (
     typeof value.id === "string" && value.id.length > 0 && value.id.length <= 100 &&
@@ -53,10 +53,10 @@ function isPiece(value: unknown): value is PlacedPiece {
 function parseSubmission(value: unknown): Submission | null {
   if (!isRecord(value) || !Array.isArray(value.components) || !Array.isArray(value.plan) || !Array.isArray(value.toolsUsed)) return null;
   if (!causes.has(value.cause as CauseId) || !confidences.has(value.confidence as Confidence) || !severities.has(value.severity as Severity)) return null;
-  if (value.components.length > components.size || !value.components.every((item) => components.has(item as ComponentId))) return null;
+  if (value.components.length === 0 || value.components.length > components.size || !value.components.every((item) => components.has(item as ComponentId))) return null;
   if (new Set(value.components).size !== value.components.length) return null;
   if (value.plan.length === 0 || value.plan.length > 20 || !value.plan.every(isPiece)) return null;
-  if (value.toolsUsed.length > toolIds.size || !value.toolsUsed.every((item) => toolIds.has(item as ToolId))) return null;
+  if (value.toolsUsed.length < 3 || value.toolsUsed.length > toolIds.size || !value.toolsUsed.every((item) => toolIds.has(item as ToolId))) return null;
   if (new Set(value.toolsUsed).size !== value.toolsUsed.length) return null;
 
   const plan = value.plan as PlacedPiece[];
@@ -92,9 +92,20 @@ export async function POST(request: Request) {
     (total, id) => total + (investigationTools.find((tool) => tool.id === id)?.cost ?? 0),
     0,
   );
+  const creditsSpent = submission.plan.reduce(
+    (total, piece) => total + actionCost(piece),
+    0,
+  );
+  if (
+    researchSpent > dailyScenario.investigationPoints ||
+    creditsSpent > dailyScenario.credits
+  ) {
+    return NextResponse.json({ error: "The plan exceeds the available field budget." }, { status: 400 });
+  }
+
   const serverSubmission: Submission = {
     ...submission,
-    creditsSpent: submission.plan.reduce((total, piece) => total + actionCost(piece), 0),
+    creditsSpent,
     researchPointsRemaining: Math.max(0, dailyScenario.investigationPoints - researchSpent),
   };
 
